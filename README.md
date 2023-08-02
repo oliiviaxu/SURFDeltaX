@@ -123,6 +123,9 @@ The modifyChannelWidths function is the same as that in ChannelWidthDetection.py
 ##### genWatermask.py
 Generates a water mask from a Sentinel-2 image. The water mask is created by setting all "no data" values in the input .tif file to 0 and all other values to 1, effectively creating a binary mask where water pixels are represented by 1 and non-water pixels by 0.
 
+##### fixWatermask.py
+Modifies a raster watermask along a centerline by accounting for narrow secondary channels not represented in the watermask. 
+
 ###### Parameters: 
 - `input_tif` (str): The path to the input .tif file, which is the Sentinel-2 image.
 - `output_tif` (str): The path to the output .tif file that will store the generated water mask.
