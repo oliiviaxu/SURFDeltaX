@@ -17,7 +17,7 @@ def interpolate_centerline_with_width(original_shapefile, pixel_length, output_s
     new_points = []
 
     # Iterate over each centerline segment in the original GeoDataFrame
-    for i, row in gdf_original.iterrows():
+    for row in gdf_original.iterrows():
         line = row['geometry']
         width = row['width_m']
 

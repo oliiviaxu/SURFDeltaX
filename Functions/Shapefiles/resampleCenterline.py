@@ -9,21 +9,18 @@ from shapely.geometry import Point, LineString
 #field
 # @param original_shapefile: the original shapefile with the centerline and width field
 # @param cropped_shapefile: the shapefile with the centerline that has been cropped to the extent of the
-def resample_with_width(original_shapefile, cropped_shapefile, pixel_length, output_shapefile):
+def resample_with_width(original_shapefile, pixel_length, output_shapefile):
     # Read the original shapefile
-    gdf_original = gpd.read_file(original_shapefile)
+    gdf = gpd.read_file(original_shapefile)
 
-    # Read the cropped shapefile
-    gdf = gpd.read_file(cropped_shapefile)
-    gdf.to_crs(gdf_original.crs)
-
-    perp_points = []  # Store the points 
+    resampled = []  # Store the points 
+    count = 0
 
     # Iterate over each centerline segment in the original GeoDataFrame
     for i, row in gdf.iterrows():
         line = row['geometry']
-        # Get the width_m field, read shapefile to determine name of width field 
-        width = row['width_m']
+        # OPTIONAL: Get the width_m field, read shapefile to determine name of width field 
+        # width = row['width_m']
 
         if line is None:
             continue
@@ -47,13 +44,15 @@ def resample_with_width(original_shapefile, cropped_shapefile, pixel_length, out
             for k in range(num_intervals):
                 fraction = float(k) / num_intervals
                 point = line.interpolate(fraction, normalized=True)
-                perp_points.append({'ID': i, 'geometry': point, 'orig_width': width})
+                resampled.append({'ID': i, 'geometry': point})
+                #OPTIONAL: resampled.append({'ID': i, 'geometry': point, 'orig_width': width})
                 count += 1
-        print(count)
+                print(count)
 
+    columns = ['ID', 'geometry']
     # Create a new GeoDataFrame from the list of points
-    gdf_new = gpd.GeoDataFrame(perp_points)
-    gdf_new.crs = gdf_original.crs
+    gdf_new = gpd.GeoDataFrame(resampled, columns=columns)
+    gdf_new.crs = gdf.crs
 
     # Write the new GeoDataFrame to a shapefile
     gdf_new.to_file(output_shapefile, driver='ESRI Shapefile')

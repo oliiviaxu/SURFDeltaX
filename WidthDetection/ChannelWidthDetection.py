@@ -7,23 +7,20 @@ import geopandas as gpd
 from shapely.geometry import Point, LineString
 import numpy as np
 import rasterio
-import matplotlib.pyplot as plt
 
-#WORKING 
-#Overview: To detect the width fo the secondary channels it is necessary to find the
-#orthogonal line to the centerline. 
-# @param original_shapefile: the original shapefile that contains the centerline
-# @param shapefile: the shapefile that contains the perpendicular points
+#STEP 1: Generate perpendicular points forming orthogonal cross sections to the
+# each centerline segment. 
+# @param shapefile: the original centerline shapefile
 # @param pixel_length: the length of the pixel in meters
 # @param perp_line_length: the length of the perpendicular line in meters
 # @param num_intermediate_points: the number of intermediate points to interpolate between the start and end points
 # @param output_file_name: the name of the output shapefile
-# @return: None 
 def generatePerpendicularPoints(shapefile, pixel_length, perp_line_length, num_intermediate_points, file_name):
     # Read the shapefile with geopandas
     gdf = gpd.read_file(shapefile)
 
     gdf.to_crs(gdf.crs)
+    print(gdf.crs)
 
     perp_points = []  # Store the perpendicular points
 
@@ -68,6 +65,7 @@ def generatePerpendicularPoints(shapefile, pixel_length, perp_line_length, num_i
                         point_on_parallel1.y + frac * (point_on_parallel2.y - point_on_parallel1.y),
                     )
                     perp_points.append({'ID': i, 'geometry': point})
+                    print({'ID': i, 'geometry': point})
 
     # Create a new GeoDataFrame from the list of points
     columns = ['ID', 'geometry']
@@ -77,12 +75,12 @@ def generatePerpendicularPoints(shapefile, pixel_length, perp_line_length, num_i
     # Write the new GeoDataFrame to a shapefile
     gdf_new.to_file(file_name, driver='ESRI Shapefile')
 
-#Overview: this function overlays the shapefile generated from generatePerpendicularPoints, reads the watermask 
+#Step 2: Overlays the shapefile generated from generatePerpendicularPoints, reads the watermask 
 # raster and outputs a numpy array with the corresponding pixel values
 # @param watermask_file: the path to the watermask raster file
 # @param shapefile: the path to the shapefile with perpendicular points
 # @param num_intermediate_points: the number of intermediate points to interpolate between the start and end points
-
+# @param file_name: the name of the output shapefile 
 def generatePixelValues(watermask_file, shapefile, num_intermediate_points, file_name):
     # Read the watermask raster data
     with rasterio.open(watermask_file) as src:
@@ -111,6 +109,7 @@ def generatePixelValues(watermask_file, shapefile, num_intermediate_points, file
                 pixel_value = curr_row[-1] if counter != 0 else default
 
             curr_row.append(pixel_value)
+            print(pixel_value)
             counter += 1
 
             # Check if the current row has num_intermediate_points elements,
@@ -126,13 +125,13 @@ def generatePixelValues(watermask_file, shapefile, num_intermediate_points, file
     # Save the numpy array to .npy file
     np.save(file_name, np_array)
 
-#this program reads the np array generated from the previous function and 
-#calculates the width of the channel at each centerline point 
+#Step 3: Reads the np array generated from the previous function and calculates the width 
+# of the channel at each centerline point 
 # @param np_array_file: the path to the numpy array file generated from previous function
 # @param shapefile: the path to the shapefile with only centerline points (resampled)
 # @param perp_line_length: the length of the perpendicular line
 # @param num_intermediate_points: the number of intermediate points per perpendicular line
-
+# @param output_file: the name of the output shapefile
 def detectChannelWidths(np_array_file, shapefile, perp_line_length, num_intermediate_points, output_file):
     # Load the numpy array from .npy file
     np_array = np.load(np_array_file)
@@ -180,9 +179,12 @@ def detectChannelWidths(np_array_file, shapefile, perp_line_length, num_intermed
 
     for i, row in gdf.iterrows():
         line = row['geometry']
-        width = row['orig_width']
+
+        #OPTIONAL: compare to orig_width
+        # width = row['orig_width']
         # Add each point to the dataframe
-        temp = {'ID': i, 'geometry': line, 'orig_width': width, 'detected': widths[i]}
+        # temp = {'ID': i, 'geometry': line, 'orig_width': width, 'detected': widths[i]}
+        temp = {'ID': i, 'geometry': line, 'detected': widths[i]}
         print(temp)
         output.append(temp)
 
@@ -193,14 +195,15 @@ def detectChannelWidths(np_array_file, shapefile, perp_line_length, num_intermed
     # Write the new GeoDataFrame to a shapefile
     gdf_new.to_file(output_file, driver='ESRI Shapefile')
 
-#OPTIONAL: This function modifies the watermask raster based on the detected widths by changing the
+#OPTIONAL: Modifies the watermask raster based on the detected widths by changing the
 #pixel value. It also sets an upperbound so it does not modify channel widths greater than a user 
 #defined value
 #@param tif_file: the path to the watermask raster file
 #@param shapefile: the path to the shapefile with detected widths
 #@param upperbound: the upperbound for the channel width (widths above this value will not be modified)
 #@param pixel_length: the length of the pixel in metres 
-
+#@param output_file: the name of the output raster file
+#@param change_value: the value to change the pixel to
 def modifyChannelWidths(tif_file, shapefile, width_bound, pixel_length, output_file, change_value, pixel_bound):
     # Read TIFF file
     with rasterio.open(tif_file) as src:
@@ -213,7 +216,7 @@ def modifyChannelWidths(tif_file, shapefile, width_bound, pixel_length, output_f
     modified_raster_data = np.copy(raster_data)
 
     edited = np.zeros_like(raster_data, dtype=bool)
-
+    count = 0
     for line, width in zip(gdf['geometry'], gdf['detected']):
         # Check if the width exceeds the upperbound, skip this iteration
         if width == width_bound:
@@ -246,9 +249,10 @@ def modifyChannelWidths(tif_file, shapefile, width_bound, pixel_length, output_f
 
                 # Update the 'edited' matrix to mark the newly modified pixels as edited
                 edited[row - halved: row + halved + 1, col - halved: col + halved + 1][flag_new_pixels] = True
-
+                count += 1
                 print("Changed channel width at point: ({}, {})\n width is {}".format(row, col, width))
 
+    print("Total number of points changed: {}".format(count))
     # Copy the metadata from the source raster file
     meta = src.meta.copy()
 
