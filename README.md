@@ -1,5 +1,5 @@
 # SURFDeltaX
-SURFDeltaX is an open-source repository of pre-processing tools for the study of secondary channel networks in wetlands. This toolkit is comprised of two core functionalities: Automatic Channel Width Detection from remote sensing data and Bathymetry Data Correction. 
+SURFDeltaX is an open-source repository of pre-processing tools for data assimilation into coastal evolution models. This toolkit is comprised of two core functionalities: Automatic cross sectional data extraction from remote sensing data and Bathymetry Data Correction. 
 
 Numerical models of land-building processes require a custom mesh describing the topography and hydrodynamics of wetland environments, and this codebase provides a framework for enhancing the accuracy of the input data (shapefiles) needed for computational mesh generation. 
 
