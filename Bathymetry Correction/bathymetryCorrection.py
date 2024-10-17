@@ -124,3 +124,65 @@ def modifyChannelWidths(tif_file, shapefile, width_bound, pixel_length, output_f
     # Create a new raster file with the modified data
     with rasterio.open(output_file, 'w', **meta) as dst:
         dst.write(modified_raster_data, 1)
+
+
+
+
+def modifyChannelWidths_FixedWidth(tif_file, shapefile, width_bound, pixel_length, output_file, change_value, pixel_bound,FixedWidth,outputFlag=False):
+    # Read TIFF file
+    with rasterio.open(tif_file) as src:
+        raster_data = src.read(1)
+
+    # Read centerline shapefile
+    gdf = gpd.read_file(shapefile)
+    gdf = gdf.to_crs(src.crs)
+
+    modified_raster_data = np.copy(raster_data)
+
+    edited = np.zeros_like(raster_data, dtype=bool)
+    count = 0
+    #for line, width in zip(gdf['geometry'], gdf['detected']):
+    for line in gdf['geometry']:
+        width=FixedWidth/2
+        # Check if the width exceeds the upperbound, skip this iteration
+        if width == width_bound:
+            continue
+
+        # Iterate over each point on the centerline segment
+        for point in line.coords:
+            # Check if the point is within the raster extent
+            if src.bounds.left <= point[0] <= src.bounds.right and src.bounds.bottom <= point[1] <= src.bounds.top:
+                # Extract the row and column indices of the corresponding pixel
+                row, col = src.index(point[0], point[1])
+
+                # Access width value from gdf and set the width of the channel
+                channel_width = int(width / pixel_length)  # Divide the width by 10m and cast as integer
+
+                halved = int(channel_width / 2)
+
+                if halved < 1:
+                    halved = 1
+
+                #pixel bound was example -3 
+                region = modified_raster_data[row - halved: row + halved + 1, col - halved: col + halved + 1] > pixel_bound
+
+                # Combine conditions using bitwise AND (&) to check both flag and edited matrix
+                flag_new_pixels = region & ~edited[row - halved: row + halved + 1, col - halved: col + halved + 1]
+
+                # Apply the modifications only to the pixels that are flagged as new (not edited before)
+                #change value example is 3 
+                modified_raster_data[row - halved: row + halved + 1, col - halved: col + halved + 1][flag_new_pixels] -= change_value
+
+                # Update the 'edited' matrix to mark the newly modified pixels as edited
+                edited[row - halved: row + halved + 1, col - halved: col + halved + 1][flag_new_pixels] = True
+                count += 1
+                if outputFlag:
+                    print("Changed channel width at point: ({}, {})\n width is {}".format(row, col, width))
+
+    print("Total number of points changed: {}".format(count))
+    # Copy the metadata from the source raster file
+    meta = src.meta.copy()
+
+    # Create a new raster file with the modified data
+    with rasterio.open(output_file, 'w', **meta) as dst:
+        dst.write(modified_raster_data, 1)
